@@ -15,8 +15,8 @@
     "media": [
       {
         "type": "png-trans",
-        "name": "IMAGE_QIBLA",
-        "file": "images/qibla.png"
+        "name": "IMAGE_KAABA",
+        "file": "images/kaaba.png"
       }
     ]
   }
