@@ -4,17 +4,13 @@ static Window *window;
 static GBitmap *qibla_bmp_white;
 static GBitmap *qibla_bmp_black;
 
-// static GPath *chevron_path = NULL;
-// #define CHEVRON_WIDTH 10
-// #define CHEVRON_HEIGHT 5
-// #define CHEVRON_OFFSET 10
-// static const GPathInfo CHEVRON_PATH_INFO = {
-//     .num_points = 6,
-//     .points = (GPoint []) {{0, 0}, {CHEVRON_WIDTH, -CHEVRON_OFFSET}, {CHEVRON_WIDTH, CHEVRON_HEIGHT - CHEVRON_OFFSET}, {0, CHEVRON_HEIGHT}, {-CHEVRON_WIDTH, CHEVRON_HEIGHT - CHEVRON_OFFSET}, {-CHEVRON_WIDTH, -CHEVRON_OFFSET}, {0, 0}}
-//     // .num_points = 6,
-//     // .points = (GPoint []) {{21, 0}, {14, 26}, {28, 26}, {7, 60}, {14, 34}, {0, 34}}
-//   };
+enum AlignmentMode {
+  ALIGNMENT_MODE_SUN,
+  ALIGNMENT_MODE_NORTH,
+  NUM_ALIGNMENT_MODES
+};
 
+static int active_alignment_mode = ALIGNMENT_MODE_SUN;
 
 static int sun_direction = TRIG_MAX_ANGLE * 3 / 4;
 static int north_direction = TRIG_MAX_ANGLE * 3 / 4;
@@ -249,6 +245,12 @@ static void calculate_indicators(void) {
   // qibla_direction = TRIG_MAX_ANGLE / 4;
   // APP_LOG(APP_LOG_LEVEL_DEBUG, "Offset %d/%d QIBLA %d", sun_north_offset, TRIG_MAX_ANGLE);
 
+  if (active_alignment_mode == ALIGNMENT_MODE_NORTH) {
+    sun_direction -= sun_north_offset;
+    qibla_direction = TRIG_MAX_ANGLE/4 - north_qibla_cw_offset;
+    north_direction = TRIG_MAX_ANGLE/4;
+  }
+  layer_mark_dirty(window_get_root_layer(window));
 }
 
 static void increment_sun(void* unused){
@@ -259,6 +261,18 @@ static void increment_sun(void* unused){
   calculate_indicators();
   layer_mark_dirty(window_get_root_layer(window));
 }
+
+static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  active_alignment_mode = (active_alignment_mode + 1) % NUM_ALIGNMENT_MODES;
+  calculate_indicators();
+}
+
+static void click_config_provider(void *context) {
+  window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
+  // window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
+  // window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
+}
+
 
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
@@ -272,8 +286,8 @@ static void window_load(Window *window) {
   layer_set_update_proc(window_layer, draw_indicators);
 
 
-  increment_sun(NULL);
-  // calculate_indicators();
+  // increment_sun(NULL);
+  calculate_indicators();
 }
 
 
@@ -284,6 +298,7 @@ static void window_unload(Window *window) {
 
 static void init(void) {
   window = window_create();
+  window_set_click_config_provider(window, click_config_provider);
   window_set_window_handlers(window, (WindowHandlers) {
     .load = window_load,
     .unload = window_unload,
