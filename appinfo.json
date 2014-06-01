@@ -1,0 +1,23 @@
+{
+  "uuid": "aa276e71-9295-432c-8e36-de50590cc080",
+  "shortName": "qibla",
+  "longName": "qibla",
+  "companyName": "MakeAwesomeHappen",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": false
+  },
+  "appKeys": {
+    "dummy": 0
+  },
+  "resources": {
+    "media": [
+      {
+        "type": "png-trans",
+        "name": "IMAGE_QIBLA",
+        "file": "images/qibla.png"
+      }
+    ]
+  }
+}
