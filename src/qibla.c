@@ -7,6 +7,7 @@ static GBitmap *kaaba_bmp_black;
 enum AlignmentMode {
   ALIGNMENT_MODE_SUN,
   ALIGNMENT_MODE_NORTH,
+  ALIGNMENT_MODE_QIBLA,
   NUM_ALIGNMENT_MODES
 };
 
@@ -162,7 +163,7 @@ static void calculate_indicators(void) {
 
   strftime((char*)&tod, 6, "%H:%M", tm_now);
 
-  sun_direction = TRIG_MAX_ANGLE / 4;
+  sun_direction = 0;
   int clock_hour = (tm_now->tm_hour - 1) % 12;
   bool hemis = false; // False = north
   if (tm_now->tm_hour > 12) hemis = !hemis;
@@ -173,11 +174,14 @@ static void calculate_indicators(void) {
   int north_qibla_cw_offset = calculate_qibla_north_cw_offset(43 * TRIG_MAX_ANGLE / 360, -80 * TRIG_MAX_ANGLE / 360);
   qibla_direction = north_direction - north_qibla_cw_offset;
 
-  if (active_alignment_mode == ALIGNMENT_MODE_NORTH) {
-    sun_direction -= sun_north_offset;
-    qibla_direction = TRIG_MAX_ANGLE/4 - north_qibla_cw_offset;
-    north_direction = TRIG_MAX_ANGLE/4;
-  }
+  int alignment_mode_offset[] = {
+    TRIG_MAX_ANGLE/4, // ALIGNMENT_MODE_SUN
+    TRIG_MAX_ANGLE/4 - north_direction, // ALIGNMENT_MODE_NORTH
+    TRIG_MAX_ANGLE/4 - qibla_direction // ALIGNMENT_MODE_QIBLA
+  };
+  sun_direction += alignment_mode_offset[active_alignment_mode];
+  north_direction += alignment_mode_offset[active_alignment_mode];
+  qibla_direction += alignment_mode_offset[active_alignment_mode];
   layer_mark_dirty(window_get_root_layer(window));
 }
 
