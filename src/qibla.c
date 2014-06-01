@@ -273,6 +273,11 @@ static void click_config_provider(void *context) {
   // window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
 }
 
+void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  calculate_indicators();
+}
+
+
 
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
@@ -285,6 +290,7 @@ static void window_load(Window *window) {
 
   layer_set_update_proc(window_layer, draw_indicators);
 
+  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 
   // increment_sun(NULL);
   calculate_indicators();
