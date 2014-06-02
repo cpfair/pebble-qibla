@@ -12,6 +12,7 @@ enum AlignmentMode {
 };
 
 static int active_alignment_mode = ALIGNMENT_MODE_SUN;
+static int last_alignment_mode = -1;
 
 static int sun_direction = TRIG_MAX_ANGLE * 3 / 4;
 static int north_direction = TRIG_MAX_ANGLE * 3 / 4;
@@ -19,6 +20,22 @@ static int qibla_direction = TRIG_MAX_ANGLE * 3 / 4;
 static char tod[] = "     ";
 
 static int time_inc = 0;
+
+static void alignment_mode_tween_set(void* subject, int16_t value);
+static int16_t alignment_mode_tween_get(void* subject);
+
+#define ALIGNMENT_MODE_TWEEN_MAX 32767
+static int16_t alignment_mode_tween_value = 0;
+static const PropertyAnimationImplementation alignment_mode_tween_impl = {
+  .base = {
+    .update = (AnimationUpdateImplementation) property_animation_update_int16,
+  },
+  .accessors = {
+    .setter = { .int16 = alignment_mode_tween_set, },
+    .getter = { .int16 = (const Int16Getter) alignment_mode_tween_get, },
+  },
+};
+static PropertyAnimation* alignment_mode_tween_anim = NULL;
 
 static GPoint to_cart_ellipse(int rad_hz, int rad_vt, int angle, GPoint origin) {
   return GPoint(cos_lookup(angle) * rad_hz / TRIG_MAX_ANGLE + origin.x, origin.y - sin_lookup(angle) * rad_vt / TRIG_MAX_ANGLE);
@@ -40,7 +57,7 @@ static void draw_arrow(GContext* ctx, int rad_hz, int rad_vt, int angle, GPoint 
 static void draw_chevron(GContext* ctx, int rad_hz, int rad_vt, int angle, GPoint origin) {
   int head_angle_offset = 180000 / (rad_hz + rad_vt); // Small angle approximation? Maybe? Who cares.
   int head_inset = 7;
-  int head_height = 6;
+  int head_height = 7;
 
   GPoint arrow_end_ctr = to_cart_ellipse(rad_hz, rad_vt, angle, origin);
   GPoint arrow_end_a = to_cart_ellipse(rad_hz - head_inset, rad_vt - head_inset, angle + head_angle_offset, origin);
@@ -179,10 +196,32 @@ static void calculate_indicators(void) {
     TRIG_MAX_ANGLE/4 - north_direction, // ALIGNMENT_MODE_NORTH
     TRIG_MAX_ANGLE/4 - qibla_direction // ALIGNMENT_MODE_QIBLA
   };
-  sun_direction += alignment_mode_offset[active_alignment_mode];
-  north_direction += alignment_mode_offset[active_alignment_mode];
-  qibla_direction += alignment_mode_offset[active_alignment_mode];
+
+  int this_offset = alignment_mode_offset[active_alignment_mode];
+  if (last_alignment_mode >= 0){
+    int last_offset = alignment_mode_offset[last_alignment_mode];
+    int delta = this_offset - last_offset;
+    if (delta < 0) delta = delta + TRIG_MAX_ANGLE;
+    if (delta > TRIG_MAX_ANGLE / 2) delta = delta - TRIG_MAX_ANGLE;
+    this_offset = this_offset - (delta * (ALIGNMENT_MODE_TWEEN_MAX - alignment_mode_tween_value)) / ALIGNMENT_MODE_TWEEN_MAX;
+  }
+
+  sun_direction += this_offset;
+  north_direction += this_offset;
+  qibla_direction += this_offset;
+
   layer_mark_dirty(window_get_root_layer(window));
+}
+
+static void alignment_mode_tween_set(void* subject, int16_t value) {
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Test %d", value);
+  alignment_mode_tween_value = value;
+  calculate_indicators();
+  // layer_mark_dirty(window_get_root_layer(window));
+}
+static int16_t alignment_mode_tween_get(void* subject) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "GOT V %d", alignment_mode_tween_value);
+  return alignment_mode_tween_value;
 }
 
 static void increment_sun(void* unused){
@@ -193,7 +232,10 @@ static void increment_sun(void* unused){
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  last_alignment_mode = active_alignment_mode;
   active_alignment_mode = (active_alignment_mode + 1) % NUM_ALIGNMENT_MODES;
+  alignment_mode_tween_value = 0;
+  animation_schedule((Animation*)alignment_mode_tween_anim);
   calculate_indicators();
 }
 
@@ -213,6 +255,10 @@ static void window_load(Window *window) {
   layer_set_update_proc(window_layer, draw_indicators);
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 
+  alignment_mode_tween_anim = property_animation_create(&alignment_mode_tween_impl, window_layer, NULL, NULL);
+  // This is broken :(
+  alignment_mode_tween_anim->values.from.int16 = 0;
+  alignment_mode_tween_anim->values.to.int16 = ALIGNMENT_MODE_TWEEN_MAX;
   // increment_sun(NULL);
   calculate_indicators();
 }
