@@ -11,6 +11,12 @@ enum AlignmentMode {
   NUM_ALIGNMENT_MODES
 };
 
+enum AMKeys {
+  AM_DST,
+  AM_GEO_LAT,
+  AM_GEO_LON
+};
+
 static int active_alignment_mode = ALIGNMENT_MODE_SUN;
 static int last_alignment_mode = -1;
 
@@ -18,6 +24,11 @@ static int sun_direction = TRIG_MAX_ANGLE * 3 / 4;
 static int north_direction = TRIG_MAX_ANGLE * 3 / 4;
 static int qibla_direction = TRIG_MAX_ANGLE * 3 / 4;
 static char tod[] = "     ";
+
+static int setting_geo_lat = -1;
+static int setting_geo_lon = -1;
+static int setting_dst = -1;
+static bool settings_fresh = false;
 
 static int time_inc = 0;
 
@@ -110,38 +121,41 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
   graphics_context_set_stroke_color(ctx, GColorWhite);
   GPoint origin = GPoint(bounds.size.w/2, bounds.size.h/2);
 
-  // Amazing trig functions are amazing!
+  bool settings_ok = setting_dst != -1 && setting_geo_lat != -1 && setting_geo_lon != -1;
+  if (settings_ok) {
+    // Amazing trig functions are amazing!
 
-  // SUN INDICATOR
-  int sun_rad = 9;
-  int sun_margin = 5;
-  int sun_rad_vt = (bounds.size.h - sun_margin) / 2 - sun_rad;
-  int sun_rad_hz = (bounds.size.w - sun_margin) / 2 - sun_rad;
-  GPoint sun_loc = to_cart_ellipse(sun_rad_hz, sun_rad_vt, sun_direction, origin);
-  graphics_fill_circle(ctx, sun_loc, sun_rad);
+    // SUN INDICATOR
+    int sun_rad = 9;
+    int sun_margin = 5;
+    int sun_rad_vt = (bounds.size.h - sun_margin) / 2 - sun_rad;
+    int sun_rad_hz = (bounds.size.w - sun_margin) / 2 - sun_rad;
+    GPoint sun_loc = to_cart_ellipse(sun_rad_hz, sun_rad_vt, sun_direction, origin);
+    graphics_fill_circle(ctx, sun_loc, sun_rad);
 
-  // NORTH INDICATOR
-  int north_rad = 7;
-  int north_margin = 35;
-  int north_arrow_inset = -15;
-  int north_rad_vt = (bounds.size.h - north_margin) / 2 - north_rad;
-  int north_rad_hz = (bounds.size.w - north_margin) / 2 - north_rad;
-  GPoint north_loc = to_cart_ellipse(north_rad_hz, north_rad_vt, north_direction, origin);
+    // NORTH INDICATOR
+    int north_rad = 7;
+    int north_margin = 35;
+    int north_arrow_inset = -15;
+    int north_rad_vt = (bounds.size.h - north_margin) / 2 - north_rad;
+    int north_rad_hz = (bounds.size.w - north_margin) / 2 - north_rad;
+    GPoint north_loc = to_cart_ellipse(north_rad_hz, north_rad_vt, north_direction, origin);
 
-  graphics_draw_text(ctx, "N", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(north_loc.x - north_rad + 1, north_loc.y - north_rad - 5, north_rad * 2, north_rad * 2), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
-  graphics_context_set_fill_color(ctx, GColorBlack);
-  draw_chevron(ctx, north_rad_hz - north_arrow_inset, north_rad_vt - north_arrow_inset, north_direction, origin);
-  graphics_context_set_fill_color(ctx, GColorWhite);
+    graphics_draw_text(ctx, "N", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(north_loc.x - north_rad + 1, north_loc.y - north_rad - 5, north_rad * 2, north_rad * 2), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    graphics_context_set_fill_color(ctx, GColorBlack);
+    draw_chevron(ctx, north_rad_hz - north_arrow_inset, north_rad_vt - north_arrow_inset, north_direction, origin);
+    graphics_context_set_fill_color(ctx, GColorWhite);
 
-  // QIBLA INDICATOR
-  int qibla_rad = 18;
-  int qibla_margin = 3;
-  int qibla_arrow_inset = 0;
-  int qibla_rad_vt = (bounds.size.h - qibla_margin) / 2 - qibla_rad;
-  int qibla_rad_hz = (bounds.size.w - qibla_margin) / 2 - qibla_rad;
+    // QIBLA INDICATOR
+    int qibla_rad = 18;
+    int qibla_margin = 3;
+    int qibla_arrow_inset = 0;
+    int qibla_rad_vt = (bounds.size.h - qibla_margin) / 2 - qibla_rad;
+    int qibla_rad_hz = (bounds.size.w - qibla_margin) / 2 - qibla_rad;
 
-  draw_bf_arrow(ctx, qibla_rad_hz - qibla_arrow_inset, qibla_rad_vt - qibla_arrow_inset, qibla_direction, origin);
+    draw_bf_arrow(ctx, qibla_rad_hz - qibla_arrow_inset, qibla_rad_vt - qibla_arrow_inset, qibla_direction, origin);
 
+  }
   // KAABA
   int kaaba_width = 32;
   int kaaba_height = 36;
@@ -150,6 +164,11 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpClear);
   graphics_draw_bitmap_in_rect(ctx, kaaba_bmp_black, GRect(bounds.size.w/2 - kaaba_width/2, bounds.size.h/2 - kaaba_height/2, kaaba_width, kaaba_height));
 
+  if (!settings_fresh) {
+    graphics_context_set_fill_color(ctx, GColorBlack);
+    graphics_fill_rect(ctx, GRect(0, bounds.size.h - 20, bounds.size.w, 20), 0, 0);
+    graphics_draw_text(ctx, "No Phone Connection", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 20, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+  }
   // graphics_draw_text(ctx, tod, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 20, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
@@ -181,14 +200,14 @@ static void calculate_indicators(void) {
   strftime((char*)&tod, 6, "%H:%M", tm_now);
 
   sun_direction = 0;
-  int clock_hour = (tm_now->tm_hour - 1) % 12;
-  bool hemis = false; // False = north
+  int clock_hour_mintes = (tm_now->tm_hour * 60 + setting_dst) % (12 * 360);
+  bool hemis = setting_geo_lat <= 0; // False = north
   if (tm_now->tm_hour > 12) hemis = !hemis;
 
-  int sun_north_offset = ((clock_hour * 60 + tm_now->tm_min) * TRIG_MAX_ANGLE / 12 / 60 / 2 + (hemis ? TRIG_MAX_ANGLE / 2 : 0)); // TODO:DST?
+  int sun_north_offset = ((clock_hour_mintes + tm_now->tm_min) * TRIG_MAX_ANGLE / 12 / 60 / 2 + (hemis ? TRIG_MAX_ANGLE / 2 : 0)); // TODO:DST?
   north_direction = sun_direction + sun_north_offset;
 
-  int north_qibla_cw_offset = calculate_qibla_north_cw_offset(43 * TRIG_MAX_ANGLE / 360, -80 * TRIG_MAX_ANGLE / 360);
+  int north_qibla_cw_offset = calculate_qibla_north_cw_offset(setting_geo_lat, setting_geo_lon);
   qibla_direction = north_direction - north_qibla_cw_offset;
 
   int alignment_mode_offset[] = {
@@ -267,7 +286,50 @@ static void window_unload(Window *window) {
   //...
 }
 
+static void load_settings(void) {
+  if (persist_exists(AM_DST)) {
+    setting_dst = persist_read_int(AM_DST);
+  }
+  if (persist_exists(AM_GEO_LAT)) {
+    setting_geo_lat = persist_read_int(AM_GEO_LAT);
+  }
+  if (persist_exists(AM_GEO_LON)) {
+    setting_geo_lon = persist_read_int(AM_GEO_LON);
+  }
+}
+
+static void persist_settings(void) {
+  persist_write_int(AM_DST, setting_dst);
+  persist_write_int(AM_GEO_LAT, setting_geo_lat);
+  persist_write_int(AM_GEO_LON, setting_geo_lon);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "SETTINGS DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat, setting_geo_lon);
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "OR DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat * 360 / TRIG_MAX_ANGLE, setting_geo_lon * 360 / TRIG_MAX_ANGLE);
+}
+
+static void in_received_handler(DictionaryIterator *received, void *context) {
+  Tuple *dst_tuple = dict_find(received, AM_DST);
+  if (dst_tuple) {
+    setting_dst = dst_tuple->value->int32;
+  }
+  Tuple *geo_lat_tuple = dict_find(received, AM_GEO_LAT);
+  if (geo_lat_tuple) {
+    setting_geo_lat = geo_lat_tuple->value->int32;
+  }
+  Tuple *geo_lon_tuple = dict_find(received, AM_GEO_LON);
+  if (geo_lon_tuple) {
+    setting_geo_lon = geo_lon_tuple->value->int32;
+  }
+  settings_fresh = true;
+  calculate_indicators();
+  persist_settings();
+}
+
 static void init(void) {
+
+  load_settings();
+  app_message_register_inbox_received(in_received_handler);
+  app_message_open(128, 128);
+
   window = window_create();
   window_set_click_config_provider(window, click_config_provider);
   window_set_window_handlers(window, (WindowHandlers) {
