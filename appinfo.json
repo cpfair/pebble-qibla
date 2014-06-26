@@ -1,7 +1,7 @@
 {
   "uuid": "aa276e71-9295-432c-8e36-de50590cc080",
-  "shortName": "qibla",
-  "longName": "qibla",
+  "shortName": "Qibla",
+  "longName": "Qibla",
   "capabilities": [ "location" ],
   "companyName": "MakeAwesomeHappen",
   "versionCode": 1,
@@ -20,6 +20,12 @@
         "type": "png-trans",
         "name": "IMAGE_KAABA",
         "file": "images/kaaba.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_KAABA_MENUICON",
+        "file": "images/kaaba_icon.png",
+        "menuIcon": true
       }
     ]
   }
