@@ -28,6 +28,7 @@ static char tod[] = "     ";
 static int setting_geo_lat = -1;
 static int setting_geo_lon = -1;
 static int setting_dst = -1;
+static bool dont_whine_about_settings_freshness = true;
 static bool settings_fresh = false;
 
 static int time_inc = 0;
@@ -164,10 +165,10 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpClear);
   graphics_draw_bitmap_in_rect(ctx, kaaba_bmp_black, GRect(bounds.size.w/2 - kaaba_width/2, bounds.size.h/2 - kaaba_height/2, kaaba_width, kaaba_height));
 
-  if (!settings_fresh) {
+  if (!settings_fresh && !dont_whine_about_settings_freshness) {
     graphics_context_set_fill_color(ctx, GColorBlack);
     graphics_fill_rect(ctx, GRect(0, bounds.size.h - 20, bounds.size.w, 20), 0, 0);
-    graphics_draw_text(ctx, "No Phone Connection", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 20, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    graphics_draw_text(ctx, "No Phone Connection", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
   }
   // graphics_draw_text(ctx, tod, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 20, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
@@ -302,7 +303,7 @@ static void persist_settings(void) {
   persist_write_int(AM_DST, setting_dst);
   persist_write_int(AM_GEO_LAT, setting_geo_lat);
   persist_write_int(AM_GEO_LON, setting_geo_lon);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "SETTINGS DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat, setting_geo_lon);
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "SETTINGS DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat, setting_geo_lon);
   // APP_LOG(APP_LOG_LEVEL_DEBUG, "OR DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat * 360 / TRIG_MAX_ANGLE, setting_geo_lon * 360 / TRIG_MAX_ANGLE);
 }
 
@@ -324,11 +325,18 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
   persist_settings();
 }
 
+static void start_whining_about_freshness(void* unused) {
+  dont_whine_about_settings_freshness = false;
+  calculate_indicators();
+}
+
 static void init(void) {
 
   load_settings();
   app_message_register_inbox_received(in_received_handler);
   app_message_open(128, 128);
+
+  app_timer_register(1500, start_whining_about_freshness, NULL);
 
   window = window_create();
   window_set_click_config_provider(window, click_config_provider);

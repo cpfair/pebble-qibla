@@ -19,7 +19,7 @@ var am_send_fail = function(e){
 };
 
 var push_geo_keys = function(pos){
-    console.log("Send geo lat = " + pos.coords.latitude + " llong=" + pos.coords.longitude);
+    // console.log("Send geo lat = " + pos.coords.latitude + " long = " + pos.coords.longitude);
     Pebble.sendAppMessage({
         "AM_GEO_LAT": Math.round(pos.coords.latitude * TRIG_MAX_ANGLE / 360),
         "AM_GEO_LON": Math.round(pos.coords.longitude * TRIG_MAX_ANGLE / 360)
