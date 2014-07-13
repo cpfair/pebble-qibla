@@ -4,26 +4,14 @@ static Window *window;
 static GBitmap *kaaba_bmp_white;
 static GBitmap *kaaba_bmp_black;
 
-enum AlignmentMode {
-  ALIGNMENT_MODE_SUN,
-  ALIGNMENT_MODE_NORTH,
-  ALIGNMENT_MODE_QIBLA,
-  NUM_ALIGNMENT_MODES
-};
-
 enum AMKeys {
   AM_DST,
   AM_GEO_LAT,
   AM_GEO_LON
 };
 
-static int active_alignment_mode = ALIGNMENT_MODE_SUN;
-static int last_alignment_mode = -1;
-
-static int sun_direction = TRIG_MAX_ANGLE * 3 / 4;
 static int north_direction = TRIG_MAX_ANGLE * 3 / 4;
 static int qibla_direction = TRIG_MAX_ANGLE * 3 / 4;
-static char tod[] = "     ";
 
 static int setting_geo_lat = -1;
 static int setting_geo_lon = -1;
@@ -31,23 +19,7 @@ static int setting_dst = -1;
 static bool dont_whine_about_settings_freshness = true;
 static bool settings_fresh = false;
 
-static int time_inc = 0;
-
-static void alignment_mode_tween_set(void* subject, int16_t value);
-static int16_t alignment_mode_tween_get(void* subject);
-
-#define ALIGNMENT_MODE_TWEEN_MAX 32767
-static int16_t alignment_mode_tween_value = 0;
-static const PropertyAnimationImplementation alignment_mode_tween_impl = {
-  .base = {
-    .update = (AnimationUpdateImplementation) property_animation_update_int16,
-  },
-  .accessors = {
-    .setter = { .int16 = alignment_mode_tween_set, },
-    .getter = { .int16 = (const Int16Getter) alignment_mode_tween_get, },
-  },
-};
-static PropertyAnimation* alignment_mode_tween_anim = NULL;
+static const CompassHeading compass_event_hysteresis = TRIG_MAX_ANGLE/90;
 
 static GPoint to_cart_ellipse(int rad_hz, int rad_vt, int angle, GPoint origin) {
   return GPoint(cos_lookup(angle) * rad_hz / TRIG_MAX_ANGLE + origin.x, origin.y - sin_lookup(angle) * rad_vt / TRIG_MAX_ANGLE);
@@ -126,14 +98,6 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
   if (settings_ok) {
     // Amazing trig functions are amazing!
 
-    // SUN INDICATOR
-    int sun_rad = 9;
-    int sun_margin = 5;
-    int sun_rad_vt = (bounds.size.h - sun_margin) / 2 - sun_rad;
-    int sun_rad_hz = (bounds.size.w - sun_margin) / 2 - sun_rad;
-    GPoint sun_loc = to_cart_ellipse(sun_rad_hz, sun_rad_vt, sun_direction, origin);
-    graphics_fill_circle(ctx, sun_loc, sun_rad);
-
     // NORTH INDICATOR
     int north_rad = 7;
     int north_margin = 35;
@@ -192,79 +156,23 @@ static int calculate_qibla_north_cw_offset(int lat, int lon) {
   return result;
 }
 
-static void calculate_indicators(void) {
-
-  time_t now;
-  now = time(NULL) + time_inc;
-  struct tm* tm_now = localtime(& now);
-
-  strftime((char*)&tod, 6, "%H:%M", tm_now);
-
-  sun_direction = 0;
-  int clock_hour_mintes = (tm_now->tm_hour * 60 + setting_dst) % (12 * 360);
-  bool hemis = setting_geo_lat <= 0; // False = north
-  if (tm_now->tm_hour > 12) hemis = !hemis;
-
-  int sun_north_offset = ((clock_hour_mintes + tm_now->tm_min) * TRIG_MAX_ANGLE / 12 / 60 / 2 + (hemis ? TRIG_MAX_ANGLE / 2 : 0)); // TODO:DST?
-  north_direction = sun_direction + sun_north_offset;
-
+static void calculate_indicators_given_north(void) {
   int north_qibla_cw_offset = calculate_qibla_north_cw_offset(setting_geo_lat, setting_geo_lon);
   qibla_direction = north_direction - north_qibla_cw_offset;
-
-  int alignment_mode_offset[] = {
-    TRIG_MAX_ANGLE/4, // ALIGNMENT_MODE_SUN
-    TRIG_MAX_ANGLE/4 - north_direction, // ALIGNMENT_MODE_NORTH
-    TRIG_MAX_ANGLE/4 - qibla_direction // ALIGNMENT_MODE_QIBLA
-  };
-
-  int this_offset = alignment_mode_offset[active_alignment_mode];
-  if (last_alignment_mode >= 0){
-    int last_offset = alignment_mode_offset[last_alignment_mode];
-    int delta = this_offset - last_offset;
-    if (delta < 0) delta = delta + TRIG_MAX_ANGLE;
-    if (delta > TRIG_MAX_ANGLE / 2) delta = delta - TRIG_MAX_ANGLE;
-    this_offset = this_offset - (delta * (ALIGNMENT_MODE_TWEEN_MAX - alignment_mode_tween_value)) / ALIGNMENT_MODE_TWEEN_MAX;
-  }
-
-  sun_direction += this_offset;
-  north_direction += this_offset;
-  qibla_direction += this_offset;
-
   layer_mark_dirty(window_get_root_layer(window));
 }
 
-static void alignment_mode_tween_set(void* subject, int16_t value) {
-  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Test %d", value);
-  alignment_mode_tween_value = value;
-  calculate_indicators();
-  // layer_mark_dirty(window_get_root_layer(window));
-}
-static int16_t alignment_mode_tween_get(void* subject) {
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "GOT V %d", alignment_mode_tween_value);
-  return alignment_mode_tween_value;
-}
 
-static void increment_sun(void* unused){
-  app_timer_register(33, increment_sun, NULL);
-  time_inc += 60;
-  calculate_indicators();
-  layer_mark_dirty(window_get_root_layer(window));
-}
 
-static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  last_alignment_mode = active_alignment_mode;
-  active_alignment_mode = (active_alignment_mode + 1) % NUM_ALIGNMENT_MODES;
-  alignment_mode_tween_value = 0;
-  animation_schedule((Animation*)alignment_mode_tween_anim);
-  calculate_indicators();
-}
-
-static void click_config_provider(void *context) {
-  window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
-}
-
-static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  calculate_indicators();
+static void compass_heading_handler(CompassHeadingData heading_data){
+    // uint* data = (uint*)&heading_data;
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "%8X:%8X:%X", *data, *(data+1), *(data+2));
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Data: mag %d true %d compassval %s declval %s", (int)heading_data.magnetic_heading, (int)heading_data.true_heading, heading_data.is_compass_valid ? "T":"F", heading_data.is_declination_valid ? "T":"F");
+    // Something's broken here
+    if (heading_data.is_compass_valid || true){
+      north_direction = TRIG_MAX_ANGLE/4 - heading_data.magnetic_heading;
+      calculate_indicators_given_north();
+    }
 }
 
 static void window_load(Window *window) {
@@ -273,14 +181,7 @@ static void window_load(Window *window) {
   kaaba_bmp_black = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_KAABA_BLACK);
 
   layer_set_update_proc(window_layer, draw_indicators);
-  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 
-  alignment_mode_tween_anim = property_animation_create(&alignment_mode_tween_impl, window_layer, NULL, NULL);
-  // This is broken :(
-  alignment_mode_tween_anim->values.from.int16 = 0;
-  alignment_mode_tween_anim->values.to.int16 = ALIGNMENT_MODE_TWEEN_MAX;
-  // increment_sun(NULL);
-  calculate_indicators();
 }
 
 static void window_unload(Window *window) {
@@ -321,13 +222,13 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
     setting_geo_lon = geo_lon_tuple->value->int32;
   }
   settings_fresh = true;
-  calculate_indicators();
+  calculate_indicators_given_north();
   persist_settings();
 }
 
 static void start_whining_about_freshness(void* unused) {
   dont_whine_about_settings_freshness = false;
-  calculate_indicators();
+  calculate_indicators_given_north();
 }
 
 static void init(void) {
@@ -338,8 +239,10 @@ static void init(void) {
 
   app_timer_register(1500, start_whining_about_freshness, NULL);
 
+  compass_service_set_heading_filter(compass_event_hysteresis);
+  compass_service_subscribe(&compass_heading_handler);
+
   window = window_create();
-  window_set_click_config_provider(window, click_config_provider);
   window_set_window_handlers(window, (WindowHandlers) {
     .load = window_load,
     .unload = window_unload,
