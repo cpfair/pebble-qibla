@@ -10,8 +10,11 @@ enum AMKeys {
   AM_GEO_LON
 };
 
-static int north_direction = TRIG_MAX_ANGLE * 3 / 4;
-static int qibla_direction = TRIG_MAX_ANGLE * 3 / 4;
+
+static int north_direction = 0;
+static int damped_north_direction = -TRIG_MAX_ANGLE * 3 / 4;
+static int damped_qibla_direction = 0;
+static int qibla_north_offset_cw = 0;
 
 static int setting_geo_lat = -1;
 static int setting_geo_lon = -1;
@@ -104,11 +107,11 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     int north_arrow_inset = -15;
     int north_rad_vt = (bounds.size.h - north_margin) / 2 - north_rad;
     int north_rad_hz = (bounds.size.w - north_margin) / 2 - north_rad;
-    GPoint north_loc = to_cart_ellipse(north_rad_hz, north_rad_vt, north_direction, origin);
+    GPoint north_loc = to_cart_ellipse(north_rad_hz, north_rad_vt, damped_north_direction, origin);
 
     graphics_draw_text(ctx, "N", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(north_loc.x - north_rad + 1, north_loc.y - north_rad - 5, north_rad * 2, north_rad * 2), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
     graphics_context_set_fill_color(ctx, GColorBlack);
-    draw_chevron(ctx, north_rad_hz - north_arrow_inset, north_rad_vt - north_arrow_inset, north_direction, origin);
+    draw_chevron(ctx, north_rad_hz - north_arrow_inset, north_rad_vt - north_arrow_inset, damped_north_direction, origin);
     graphics_context_set_fill_color(ctx, GColorWhite);
 
     // QIBLA INDICATOR
@@ -118,7 +121,7 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     int qibla_rad_vt = (bounds.size.h - qibla_margin) / 2 - qibla_rad;
     int qibla_rad_hz = (bounds.size.w - qibla_margin) / 2 - qibla_rad;
 
-    draw_bf_arrow(ctx, qibla_rad_hz - qibla_arrow_inset, qibla_rad_vt - qibla_arrow_inset, qibla_direction, origin);
+    draw_bf_arrow(ctx, qibla_rad_hz - qibla_arrow_inset, qibla_rad_vt - qibla_arrow_inset, damped_qibla_direction, origin);
 
   }
   // KAABA
@@ -156,13 +159,34 @@ static int calculate_qibla_north_cw_offset(int lat, int lon) {
   return result;
 }
 
-static void calculate_indicators_given_north(void) {
-  int north_qibla_cw_offset = calculate_qibla_north_cw_offset(setting_geo_lat, setting_geo_lon);
-  qibla_direction = north_direction - north_qibla_cw_offset;
+static void update_indicator_directions(void) {
+  damped_north_direction = north_direction;
+  damped_qibla_direction = damped_north_direction - qibla_north_offset_cw;
+  layer_mark_dirty(window_get_root_layer(window));
+}
+
+static void update_indicator_directions_animated(void) {
+  static const int damping_factor_1 = 10;
+  static const int damping_factor_2 = -20;
+  static const int MAX_PROGRESS = 100;
+  int delta = (north_direction - damped_north_direction);
+  int progress = MAX_PROGRESS - (abs(delta) * MAX_PROGRESS / (TRIG_MAX_ANGLE/2));
+
+
+  damped_north_direction +=  delta * (progress / damping_factor_1 + progress * progress / MAX_PROGRESS / damping_factor_2) / MAX_PROGRESS;
+  damped_qibla_direction = damped_north_direction - qibla_north_offset_cw;
   layer_mark_dirty(window_get_root_layer(window));
 }
 
 
+static void calculate_qibla_north_offset(void) {
+  qibla_north_offset_cw = calculate_qibla_north_cw_offset(setting_geo_lat, setting_geo_lon);
+}
+
+static void fake_animation(void* unused){
+  update_indicator_directions_animated();
+  app_timer_register(33, fake_animation, NULL);
+}
 
 static void compass_heading_handler(CompassHeadingData heading_data){
     // uint* data = (uint*)&heading_data;
@@ -171,7 +195,6 @@ static void compass_heading_handler(CompassHeadingData heading_data){
     // Something's broken here
     if (heading_data.is_compass_valid || true){
       north_direction = TRIG_MAX_ANGLE/4 - heading_data.magnetic_heading;
-      calculate_indicators_given_north();
     }
 }
 
@@ -181,6 +204,9 @@ static void window_load(Window *window) {
   kaaba_bmp_black = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_KAABA_BLACK);
 
   layer_set_update_proc(window_layer, draw_indicators);
+  calculate_qibla_north_offset();
+  update_indicator_directions();
+  fake_animation(NULL);
 
 }
 
@@ -222,13 +248,12 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
     setting_geo_lon = geo_lon_tuple->value->int32;
   }
   settings_fresh = true;
-  calculate_indicators_given_north();
+  calculate_qibla_north_offset();
   persist_settings();
 }
 
 static void start_whining_about_freshness(void* unused) {
   dont_whine_about_settings_freshness = false;
-  calculate_indicators_given_north();
 }
 
 static void init(void) {
