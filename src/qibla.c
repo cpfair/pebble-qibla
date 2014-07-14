@@ -170,7 +170,9 @@ static void update_indicator_directions_animated(void) {
   static const int damping_factor_2 = -20;
   static const int MAX_PROGRESS = 100;
   int delta = (north_direction - damped_north_direction);
-  int progress = MAX_PROGRESS - (abs(delta) * MAX_PROGRESS / (TRIG_MAX_ANGLE/2));
+  if (delta < 0) delta += TRIG_MAX_ANGLE;
+  if (delta > TRIG_MAX_ANGLE / 2) delta = delta - TRIG_MAX_ANGLE;
+  int progress = MAX_PROGRESS - (abs(delta) * MAX_PROGRESS / (TRIG_MAX_ANGLE));
 
 
   damped_north_direction +=  delta * (progress / damping_factor_1 + progress * progress / MAX_PROGRESS / damping_factor_2) / MAX_PROGRESS;
