@@ -11,7 +11,7 @@ enum AMKeys {
 };
 
 
-static int north_direction = 0;
+static int north_direction = TRIG_MAX_ANGLE / 4; // Up
 static int damped_north_direction = -TRIG_MAX_ANGLE * 3 / 4;
 static int damped_qibla_direction = 0;
 static int qibla_north_offset_cw = 0;
@@ -21,6 +21,7 @@ static int setting_geo_lon = -1;
 static int setting_dst = -1;
 static bool dont_whine_about_settings_freshness = true;
 static bool settings_fresh = false;
+static bool compass_calibrate = false;
 
 static const CompassHeading compass_event_hysteresis = TRIG_MAX_ANGLE/90;
 static const int TRIG_MAX_RATIO_SQRT = 256;
@@ -137,6 +138,14 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     graphics_context_set_fill_color(ctx, GColorBlack);
     graphics_fill_rect(ctx, GRect(0, bounds.size.h - 20, bounds.size.w, 20), 0, 0);
     graphics_draw_text(ctx, "No Phone Connection", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+  } else if (compass_calibrate) {
+    graphics_context_set_fill_color(ctx, GColorBlack);
+    graphics_fill_rect(ctx, GRect(0, bounds.size.h - 20, bounds.size.w, 20), 0, 0);
+    if (battery_state_service_peek().is_plugged) {
+      graphics_draw_text(ctx, "Unplug Charger", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    } else {
+      graphics_draw_text(ctx, "Shake & Roll Pebble", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    }
   }
   // graphics_draw_text(ctx, tod, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 20, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
@@ -199,12 +208,12 @@ static void fake_animation(void* unused){
 }
 
 static void compass_heading_handler(CompassHeadingData heading_data){
-    // uint* data = (uint*)&heading_data;
-    // APP_LOG(APP_LOG_LEVEL_DEBUG, "%8X:%8X:%X", *data, *(data+1), *(data+2));
-    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Data: mag %d true %d compassval %s declval %s", (int)heading_data.magnetic_heading, (int)heading_data.true_heading, heading_data.is_compass_valid ? "T":"F", heading_data.is_declination_valid ? "T":"F");
-    // Something's broken here
-    if (heading_data.compass_status == CompassStatusCalibrated){
+    if (heading_data.compass_status != CompassStatusDataInvalid){
+      compass_calibrate = false;
       north_direction = TRIG_MAX_ANGLE/4 - heading_data.true_heading;
+    } else {
+      compass_calibrate = true;
+      north_direction = TRIG_MAX_ANGLE/4; // Up
     }
 }
 
