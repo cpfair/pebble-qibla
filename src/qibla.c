@@ -23,6 +23,7 @@ static bool dont_whine_about_settings_freshness = true;
 static bool settings_fresh = false;
 
 static const CompassHeading compass_event_hysteresis = TRIG_MAX_ANGLE/90;
+static const int TRIG_MAX_RATIO_SQRT = 256;
 
 static GPoint to_cart_ellipse(int rad_hz, int rad_vt, int angle, GPoint origin) {
   return GPoint(cos_lookup(angle) * rad_hz / TRIG_MAX_ANGLE + origin.x, origin.y - sin_lookup(angle) * rad_vt / TRIG_MAX_ANGLE);
@@ -141,7 +142,7 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
 }
 
 static int tan_lookup(int x) {
-  return ((long)sin_lookup(x) * (long)TRIG_MAX_ANGLE) / ((long)cos_lookup(x));
+  return ((long)sin_lookup(x) * (long)TRIG_MAX_RATIO) / ((long)cos_lookup(x));
 }
 
 static int calculate_qibla_north_cw_offset(int lat, int lon) {
@@ -150,11 +151,18 @@ static int calculate_qibla_north_cw_offset(int lat, int lon) {
   int kaaba_lon = 39.823333 * TRIG_MAX_ANGLE / 360;
 
   int numerator = sin_lookup(kaaba_lon - lon);
-  long denom_a = (long)cos_lookup(lat) * (long)tan_lookup(kaaba_lat);
-  long denom_b = (long)sin_lookup(lat) * (long)cos_lookup(kaaba_lon - lon);
-  long denominator = (denom_a/TRIG_MAX_ANGLE - denom_b/TRIG_MAX_ANGLE);
+  long denom_a = ((long)cos_lookup(lat) / TRIG_MAX_RATIO_SQRT * (long)tan_lookup(kaaba_lat) / TRIG_MAX_RATIO_SQRT);
+  long denom_b = ((long)sin_lookup(lat) / TRIG_MAX_RATIO_SQRT * (long)cos_lookup(kaaba_lon - lon) / TRIG_MAX_RATIO_SQRT);
+  long denominator = denom_a - denom_b;
 
   int result = atan2_lookup((int16_t)(numerator/4), (int16_t)(denominator/4));
+
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Qibla offset %d, %d", result, (result * 360) / TRIG_MAX_ANGLE);
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Numerator raw %d, %d", (kaaba_lon - lon), ((kaaba_lon - lon) * 360) / TRIG_MAX_ANGLE);
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Numerator proc %d, %d*10^-2", (numerator), ((numerator) * 100) / TRIG_MAX_RATIO);
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Denom a proc %ld, %ld*10^-2", (denom_a), ((denom_a) * 100) / TRIG_MAX_RATIO);
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Denom b proc %ld, %ld*10^-2", (denom_b), ((denom_b) * 100) / TRIG_MAX_RATIO);
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Denom proc %ld, %ld*10^-2", (denominator), ((denominator) * 100) / TRIG_MAX_RATIO);
 
   return result;
 }
