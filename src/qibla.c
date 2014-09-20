@@ -203,8 +203,8 @@ static void compass_heading_handler(CompassHeadingData heading_data){
     // APP_LOG(APP_LOG_LEVEL_DEBUG, "%8X:%8X:%X", *data, *(data+1), *(data+2));
     // APP_LOG(APP_LOG_LEVEL_DEBUG, "Data: mag %d true %d compassval %s declval %s", (int)heading_data.magnetic_heading, (int)heading_data.true_heading, heading_data.is_compass_valid ? "T":"F", heading_data.is_declination_valid ? "T":"F");
     // Something's broken here
-    if (heading_data.is_compass_valid || true){
-      north_direction = TRIG_MAX_ANGLE/4 - heading_data.magnetic_heading;
+    if (heading_data.compass_status == CompassStatusCalibrated){
+      north_direction = TRIG_MAX_ANGLE/4 - heading_data.true_heading;
     }
 }
 
