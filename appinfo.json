@@ -4,13 +4,12 @@
   "longName": "Qibla",
   "capabilities": [ "location" ],
   "companyName": "MakeAwesomeHappen",
-  "versionCode": 2,
-  "versionLabel": "2.1",
+  "versionCode": 3,
+  "versionLabel": "2.2",
   "watchapp": {
     "watchface": false
   },
   "appKeys": {
-    "AM_DST": 0,
     "AM_GEO_LAT": 1,
     "AM_GEO_LON": 2,
     "AM_ACK": 255

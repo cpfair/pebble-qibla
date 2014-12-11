@@ -5,9 +5,8 @@ static GBitmap *kaaba_bmp_white;
 static GBitmap *kaaba_bmp_black;
 
 enum AMKeys {
-  AM_DST,
-  AM_GEO_LAT,
-  AM_GEO_LON,
+  AM_GEO_LAT=1,
+  AM_GEO_LON=2,
   AM_ACK=255
 };
 
@@ -19,7 +18,6 @@ static int qibla_north_offset_cw = 0;
 
 static int setting_geo_lat = -1;
 static int setting_geo_lon = -1;
-static int setting_dst = -1;
 static bool dont_whine_about_settings_freshness = true;
 static bool settings_fresh = false;
 static bool compass_calibrate = false;
@@ -100,7 +98,7 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
   graphics_context_set_stroke_color(ctx, GColorWhite);
   GPoint origin = GPoint(bounds.size.w/2, bounds.size.h/2);
 
-  bool settings_ok = setting_dst != -1 && setting_geo_lat != -1 && setting_geo_lon != -1;
+  bool settings_ok = setting_geo_lat != -1 && setting_geo_lon != -1;
   if (settings_ok) {
     // Amazing trig functions are amazing!
 
@@ -235,9 +233,6 @@ static void window_unload(Window *window) {
 }
 
 static void load_settings(void) {
-  if (persist_exists(AM_DST)) {
-    setting_dst = persist_read_int(AM_DST);
-  }
   if (persist_exists(AM_GEO_LAT)) {
     setting_geo_lat = persist_read_int(AM_GEO_LAT);
   }
@@ -247,7 +242,6 @@ static void load_settings(void) {
 }
 
 static void persist_settings(void) {
-  persist_write_int(AM_DST, setting_dst);
   persist_write_int(AM_GEO_LAT, setting_geo_lat);
   persist_write_int(AM_GEO_LON, setting_geo_lon);
   // APP_LOG(APP_LOG_LEVEL_DEBUG, "SETTINGS DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat, setting_geo_lon);
@@ -255,16 +249,14 @@ static void persist_settings(void) {
 }
 
 static void in_received_handler(DictionaryIterator *received, void *context) {
-  Tuple *dst_tuple = dict_find(received, AM_DST);
-  if (dst_tuple) {
-    setting_dst = dst_tuple->value->int32;
-  }
   Tuple *geo_lat_tuple = dict_find(received, AM_GEO_LAT);
   if (geo_lat_tuple) {
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Rx Lat %d", (int)geo_lat_tuple->value->int32);
     setting_geo_lat = geo_lat_tuple->value->int32;
   }
   Tuple *geo_lon_tuple = dict_find(received, AM_GEO_LON);
   if (geo_lon_tuple) {
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Rx Lon %d", (int)geo_lon_tuple->value->int32);
     setting_geo_lon = geo_lon_tuple->value->int32;
   }
   settings_fresh = true;
