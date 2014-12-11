@@ -7,7 +7,8 @@ static GBitmap *kaaba_bmp_black;
 enum AMKeys {
   AM_DST,
   AM_GEO_LAT,
-  AM_GEO_LON
+  AM_GEO_LON,
+  AM_ACK=255
 };
 
 
@@ -269,6 +270,12 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
   settings_fresh = true;
   calculate_qibla_north_offset();
   persist_settings();
+
+  // Ack to JS app so it stops spamming us
+  DictionaryIterator *iter;
+  app_message_outbox_begin(&iter);
+  dict_write_uint8(iter, AM_ACK, 1);
+  app_message_outbox_send();
 }
 
 static void start_whining_about_freshness(void* unused) {

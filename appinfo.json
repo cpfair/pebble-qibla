@@ -5,14 +5,15 @@
   "capabilities": [ "location" ],
   "companyName": "MakeAwesomeHappen",
   "versionCode": 1,
-  "versionLabel": "2.0",
+  "versionLabel": "2.1",
   "watchapp": {
     "watchface": false
   },
   "appKeys": {
     "AM_DST": 0,
     "AM_GEO_LAT": 1,
-    "AM_GEO_LON": 2
+    "AM_GEO_LON": 2,
+    "AM_ACK": 255
   },
   "resources": {
     "media": [
