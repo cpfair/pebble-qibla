@@ -12,6 +12,7 @@
   "appKeys": {
     "AM_GEO_LAT": 1,
     "AM_GEO_LON": 2,
+    "AM_GEO_NAME": 3,
     "AM_ACK": 255
   },
   "resources": {

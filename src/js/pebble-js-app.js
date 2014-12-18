@@ -13,13 +13,35 @@ var geo_error = function(err) {
     geo_pending = false;
 };
 
+var request_geo_name = function(pos) {
+    var req = new XMLHttpRequest();
+    req.onload = function(e) {
+      if (req.readyState == 4) {
+        if(req.status == 200) {
+          var response = JSON.parse(req.responseText);
+          if (response.geonames.length) {
+            var loc = response.geonames[0];
+            Pebble.sendAppMessage({
+              "AM_GEO_NAME": loc.name + (loc.adminCode1 ? ", " + loc.adminCode1 : "")
+            }, am_send_ok, am_send_fail);
+          }
+        } else { console.error('Error fetching geoname ' + req.responseText); }
+      }
+    };
+    req.send(null);
+
+};
+
 var push_geo_keys = function(pos){
     console.log("Geo request ok");
     geo_pending = false;
 
+    request_geo_name(pos);
+
     Pebble.sendAppMessage({
         "AM_GEO_LAT": Math.round(pos.coords.latitude * TRIG_MAX_ANGLE / 360),
-        "AM_GEO_LON": Math.round(pos.coords.longitude * TRIG_MAX_ANGLE / 360)
+        "AM_GEO_LON": Math.round(pos.coords.longitude * TRIG_MAX_ANGLE / 360),
+        "AM_GEO_NAME": ""
     }, am_send_ok, am_send_fail);
 };
 

@@ -7,9 +7,11 @@ static GBitmap *kaaba_bmp_black;
 enum AMKeys {
   AM_GEO_LAT=1,
   AM_GEO_LON=2,
+  AM_GEO_NAME=3,
   AM_ACK=255
 };
 
+#define GEO_NAME_LENGTH 64
 
 static int north_direction = TRIG_MAX_ANGLE / 4; // Up
 static int damped_north_direction = -TRIG_MAX_ANGLE * 3 / 4;
@@ -18,9 +20,12 @@ static int qibla_north_offset_cw = 0;
 
 static int setting_geo_lat = -1;
 static int setting_geo_lon = -1;
+static char* setting_geo_name = NULL;
 static bool dont_whine_about_settings_freshness = true;
 static bool settings_fresh = false;
 static bool compass_calibrate = false;
+
+static bool show_geo_name = false;
 
 static const CompassHeading compass_event_hysteresis = TRIG_MAX_ANGLE/90;
 static const int TRIG_MAX_RATIO_SQRT = 256;
@@ -133,18 +138,23 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpClear);
   graphics_draw_bitmap_in_rect(ctx, kaaba_bmp_black, GRect(bounds.size.w/2 - kaaba_width/2, bounds.size.h/2 - kaaba_height/2, kaaba_width, kaaba_height));
 
+  char* note = NULL;
   if (!settings_fresh && !dont_whine_about_settings_freshness) {
-    graphics_context_set_fill_color(ctx, GColorBlack);
-    graphics_fill_rect(ctx, GRect(0, bounds.size.h - 20, bounds.size.w, 20), 0, 0);
-    graphics_draw_text(ctx, "No Phone Connection", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    note = "No Phone Connection";
   } else if (compass_calibrate) {
+    if (battery_state_service_peek().is_plugged) {
+      note = "Unplug Charger";
+    } else {
+      note = "Shake & Roll Pebble";
+    }
+  } else if (show_geo_name) {
+    note = setting_geo_name;
+  }
+
+  if (note) {
     graphics_context_set_fill_color(ctx, GColorBlack);
     graphics_fill_rect(ctx, GRect(0, bounds.size.h - 20, bounds.size.w, 20), 0, 0);
-    if (battery_state_service_peek().is_plugged) {
-      graphics_draw_text(ctx, "Unplug Charger", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
-    } else {
-      graphics_draw_text(ctx, "Shake & Roll Pebble", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
-    }
+    graphics_draw_text(ctx, note, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
   }
   // graphics_draw_text(ctx, tod, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 20, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
@@ -216,7 +226,23 @@ static void compass_heading_handler(CompassHeadingData heading_data){
     }
 }
 
+void centre_button_down(void* unused, void* ctx) {
+  show_geo_name = true;
+  layer_mark_dirty(window_get_root_layer(window));
+}
+
+void centre_button_up(void* unused, void* ctx) {
+  show_geo_name = false;
+  layer_mark_dirty(window_get_root_layer(window));
+}
+
+void click_config_provider(Window *window) {
+  window_raw_click_subscribe(BUTTON_ID_SELECT, centre_button_down, centre_button_up, NULL);
+}
+
 static void window_load(Window *window) {
+  window_set_click_config_provider(window, (ClickConfigProvider) click_config_provider);
+
   Layer *window_layer = window_get_root_layer(window);
   kaaba_bmp_white = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_KAABA_WHITE);
   kaaba_bmp_black = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_KAABA_BLACK);
@@ -239,11 +265,22 @@ static void load_settings(void) {
   if (persist_exists(AM_GEO_LON)) {
     setting_geo_lon = persist_read_int(AM_GEO_LON);
   }
+  if (persist_exists(AM_GEO_NAME)) {
+    if (setting_geo_name) free(setting_geo_name);
+    setting_geo_name = malloc(GEO_NAME_LENGTH);
+    persist_read_string(AM_GEO_NAME, setting_geo_name, GEO_NAME_LENGTH);
+  }
 }
 
 static void persist_settings(void) {
   persist_write_int(AM_GEO_LAT, setting_geo_lat);
   persist_write_int(AM_GEO_LON, setting_geo_lon);
+  if (setting_geo_name) {
+    persist_write_string(AM_GEO_NAME, setting_geo_name);
+  } else {
+    persist_delete(AM_GEO_NAME);
+  }
+
   // APP_LOG(APP_LOG_LEVEL_DEBUG, "SETTINGS DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat, setting_geo_lon);
   // APP_LOG(APP_LOG_LEVEL_DEBUG, "OR DST=%d LAT=%d LON=%d", setting_dst, setting_geo_lat * 360 / TRIG_MAX_ANGLE, setting_geo_lon * 360 / TRIG_MAX_ANGLE);
 }
@@ -259,6 +296,15 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
     // APP_LOG(APP_LOG_LEVEL_DEBUG, "Rx Lon %d", (int)geo_lon_tuple->value->int32);
     setting_geo_lon = geo_lon_tuple->value->int32;
   }
+
+  Tuple *geo_name_tuple = dict_find(received, AM_GEO_NAME);
+  if (geo_name_tuple) {
+    if (setting_geo_name) free(setting_geo_name);
+    setting_geo_name = malloc(geo_name_tuple->length);
+    memcpy(setting_geo_name, geo_name_tuple->value->cstring, geo_name_tuple->length);
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Rx geoname %s", setting_geo_name);
+  }
+
   settings_fresh = true;
   calculate_qibla_north_offset();
   persist_settings();
