@@ -15,6 +15,7 @@ var geo_error = function(err) {
 
 var request_geo_name = function(pos) {
     var req = new XMLHttpRequest();
+    req.open('GET', 'https://geonames-proxy.cpfx.ca/findNearbyPlaceNameJSON?lat=' + pos.coords.latitude + '&lng=' + pos.coords.longitude + '&maxRows=1&username=pebble_quran', true);
     req.onload = function(e) {
       if (req.readyState == 4) {
         if(req.status == 200) {
