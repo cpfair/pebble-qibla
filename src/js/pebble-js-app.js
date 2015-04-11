@@ -38,6 +38,7 @@ var timeline_subscribe = function(pos) {
     req.send(JSON.stringify({
         "location_lat": pos.coords.latitude,
         "location_lon": pos.coords.longitude,
+        "tz_offset": (new Date()).getTimezoneOffset(),
         "user_token": Pebble.getAccountToken(),
         "timeline_token": timeline_token
     }));
