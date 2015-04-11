@@ -1,5 +1,8 @@
 var TRIG_MAX_ANGLE = 65536;
 var geo_update_timer, geo_pending;
+var timeline_token;
+
+var api_host = "http://192.168.0.18:5000";
 
 var am_send_ok = function(){
 };
@@ -13,31 +16,38 @@ var geo_error = function(err) {
     geo_pending = false;
 };
 
-var request_geo_name = function(pos) {
+var timeline_subscribe = function(pos) {
     var req = new XMLHttpRequest();
-    req.open('GET', 'https://geonames-proxy.cpfx.ca/findNearbyPlaceNameJSON?lat=' + pos.coords.latitude + '&lng=' + pos.coords.longitude + '&maxRows=1&username=pebble_quran', true);
+    req.open('POST', api_host + '/subscribe', true);
     req.onload = function(e) {
       if (req.readyState == 4) {
         if(req.status == 200) {
           var response = JSON.parse(req.responseText);
-          if (response.geonames.length) {
-            var loc = response.geonames[0];
+          var loc = response.location_geoname;
+          if (loc) {
             Pebble.sendAppMessage({
-              "AM_GEO_NAME": loc.name + (loc.adminCode1 ? ", " + loc.adminCode1 : "")
+              "AM_GEO_NAME": loc
             }, am_send_ok, am_send_fail);
           }
-        } else { console.error('Error fetching geoname ' + req.responseText); }
+        } else {
+          console.error('Error subscribing to timeline ' + req.responseText);
+        }
       }
     };
-    req.send(null);
-
+    req.setRequestHeader("Content-type", "application/json");
+    req.send(JSON.stringify({
+        "location_lat": pos.coords.latitude,
+        "location_lon": pos.coords.longitude,
+        "user_token": Pebble.getAccountToken(),
+        "timeline_token": timeline_token
+    }));
 };
 
 var push_geo_keys = function(pos){
     console.log("Geo request ok");
     geo_pending = false;
 
-    request_geo_name(pos);
+    timeline_subscribe(pos);
 
     Pebble.sendAppMessage({
         "AM_GEO_LAT": Math.round(pos.coords.latitude * TRIG_MAX_ANGLE / 360),
@@ -64,5 +74,21 @@ var watchapp_alive = function(){
     clearInterval(geo_update_timer);
 };
 
+var show_config = function(){
+    Pebble.openURL(api_host + '/settings/' + Pebble.getAccountToken());
+};
+
 Pebble.addEventListener("ready", app_startup);
 Pebble.addEventListener("appmessage", watchapp_alive);
+Pebble.addEventListener('showConfiguration', show_config);
+
+if (Pebble.getTimelineToken) {
+  Pebble.getTimelineToken(
+    function (token) {
+      timeline_token = token;
+    },
+    function (error) {
+      console.log('Error getting timeline token', error);
+    }
+  );
+}
