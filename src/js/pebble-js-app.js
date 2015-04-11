@@ -2,7 +2,7 @@ var TRIG_MAX_ANGLE = 65536;
 var geo_update_timer, geo_pending;
 var timeline_token;
 
-var api_host = "http://192.168.0.18:5000";
+var api_host = "https://qibla-www.cpfx.ca";
 
 var am_send_ok = function(){
 };
