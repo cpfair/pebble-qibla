@@ -1,6 +1,7 @@
 var TRIG_MAX_ANGLE = 65536;
-var geo_update_timer, geo_pending;
+var geo_update_timer, geo_pending, geo_pos;
 var timeline_token;
+var did_subscribe = false;
 
 var api_host = "https://qibla-www.cpfx.ca";
 
@@ -16,7 +17,12 @@ var geo_error = function(err) {
     geo_pending = false;
 };
 
-var timeline_subscribe = function(pos) {
+var timeline_subscribe = function() {
+    if (!geo_pos || (!timeline_token && Pebble.getTimelineToken)) {
+      return; // Not ready to subscribe yet.
+    }
+    if (did_subscribe) return;
+    did_subscribe = true;
     var req = new XMLHttpRequest();
     req.open('POST', api_host + '/subscribe', true);
     req.onload = function(e) {
@@ -36,8 +42,8 @@ var timeline_subscribe = function(pos) {
     };
     req.setRequestHeader("Content-type", "application/json");
     req.send(JSON.stringify({
-        "location_lat": pos.coords.latitude,
-        "location_lon": pos.coords.longitude,
+        "location_lat": geo_pos.coords.latitude,
+        "location_lon": geo_pos.coords.longitude,
         "tz_offset": (new Date()).getTimezoneOffset(),
         "user_token": Pebble.getAccountToken(),
         "timeline_token": timeline_token
@@ -47,8 +53,9 @@ var timeline_subscribe = function(pos) {
 var push_geo_keys = function(pos){
     console.log("Geo request ok");
     geo_pending = false;
+    geo_pos = pos;
 
-    timeline_subscribe(pos);
+    timeline_subscribe();
 
     Pebble.sendAppMessage({
         "AM_GEO_LAT": Math.round(pos.coords.latitude * TRIG_MAX_ANGLE / 360),
@@ -87,6 +94,7 @@ if (Pebble.getTimelineToken) {
   Pebble.getTimelineToken(
     function (token) {
       timeline_token = token;
+      timeline_subscribe();
     },
     function (error) {
       console.log('Error getting timeline token', error);
