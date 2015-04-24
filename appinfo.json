@@ -2,7 +2,10 @@
   "uuid": "aa276e71-9295-432c-8e36-de50590cc080",
   "shortName": "Qibla",
   "longName": "Qibla",
-  "capabilities": [ "location", "configurable" ],
+  "capabilities": [
+    "location",
+    "configurable"
+  ],
   "companyName": "MakeAwesomeHappen",
   "versionCode": 3,
   "versionLabel": "2.3",
@@ -29,5 +32,10 @@
         "menuIcon": true
       }
     ]
-  }
+  },
+  "targetPlatforms": [
+    "aplite",
+    "basalt"
+  ],
+  "sdkVersion": "3"
 }
