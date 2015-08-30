@@ -7,10 +7,11 @@
     "configurable"
   ],
   "companyName": "MakeAwesomeHappen",
-  "versionCode": 3,
-  "versionLabel": "2.4",
+  "versionCode": 4,
+  "versionLabel": "2.5",
   "watchapp": {
-    "watchface": false
+    "watchface": false,
+    "hiddenApp": true
   },
   "appKeys": {
     "AM_GEO_LAT": 1,
