@@ -70,7 +70,11 @@ static void draw_chevron(GContext* ctx, int rad_hz, int rad_vt, int angle, GPoin
 }
 
 static void draw_bf_arrow(GContext* ctx, int rad_hz, int rad_vt, int angle, GPoint origin) {
+  #ifdef PBL_PLATFORM_CHALK
+  int start_inset = 33;
+  #else
   int start_inset = 25;
+  #endif
   int start_head_inset = 4;
   int head_inset = 10;
   int side_offset = 5;
@@ -108,6 +112,7 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     // Amazing trig functions are amazing!
 
     // NORTH INDICATOR
+    #ifndef PBL_PLATFORM_CHALK
     int north_rad = 7;
     int north_margin = 35;
     int north_arrow_inset = -15;
@@ -119,6 +124,7 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     graphics_context_set_fill_color(ctx, GColorBlack);
     draw_chevron(ctx, north_rad_hz - north_arrow_inset, north_rad_vt - north_arrow_inset, damped_north_direction, origin);
     graphics_context_set_fill_color(ctx, GColorWhite);
+    #endif
 
     // QIBLA INDICATOR
     int qibla_rad = 18;
@@ -147,20 +153,38 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     } else {
       note = "Shake & Roll Pebble";
     }
-  } else if (show_geo_name) {
+  } else if (show_geo_name && setting_geo_name && strlen(setting_geo_name)) {
     note = setting_geo_name;
   }
 
   if (note) {
+    #ifdef PBL_PLATFORM_CHALK
+    GRect note_rect;
+    if (damped_qibla_direction > TRIG_MAX_ANGLE/2) {
+      note_rect = GRect(0, 40, bounds.size.w, 20);
+    } else {
+      note_rect = GRect(0, bounds.size.h - 60, bounds.size.w, 20);
+    }
+    #else
+    GRect note_rect = GRect(0, bounds.size.h - 20, bounds.size.w, 20);
+    #endif
     graphics_context_set_fill_color(ctx, GColorBlack);
-    graphics_fill_rect(ctx, GRect(0, bounds.size.h - 20, bounds.size.w, 20), 0, 0);
-    graphics_draw_text(ctx, note, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 22, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    graphics_fill_rect(ctx, note_rect, 0, 0);
+    graphics_draw_text(ctx, note, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(note_rect.origin.x, note_rect.origin.y - 2, note_rect.size.w, note_rect.size.h), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
   }
-  // graphics_draw_text(ctx, tod, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(0, bounds.size.h - 20, bounds.size.w, 20), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
 static int tan_lookup(int x) {
   return ((long)sin_lookup(x) * (long)TRIG_MAX_RATIO) / ((long)cos_lookup(x));
+}
+
+static inline void wrap_angle(int *angle) {
+  while (*angle < 0) {
+    *angle += TRIG_MAX_ANGLE;
+  }
+  while (*angle > TRIG_MAX_ANGLE) {
+    *angle -= TRIG_MAX_ANGLE;
+  }
 }
 
 static int calculate_qibla_north_cw_offset(int lat, int lon) {
@@ -203,6 +227,10 @@ static void update_indicator_directions_animated(void) {
 
   damped_north_direction +=  delta * (progress / damping_factor_1 + progress * progress / MAX_PROGRESS / damping_factor_2) / MAX_PROGRESS;
   damped_qibla_direction = damped_north_direction - qibla_north_offset_cw;
+  // Prevent these from going wildly out of range
+  wrap_angle(&damped_north_direction);
+  wrap_angle(&damped_qibla_direction);
+
   layer_mark_dirty(window_get_root_layer(window));
 }
 
