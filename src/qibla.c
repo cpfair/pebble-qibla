@@ -4,6 +4,9 @@ static Window *window;
 static GBitmap *kaaba_bmp_white;
 static GBitmap *kaaba_bmp_black;
 
+static GColor foreground_colour;
+static GColor background_colour;
+
 enum AMKeys {
   AM_GEO_LAT=1,
   AM_GEO_LON=2,
@@ -100,11 +103,11 @@ static void draw_bf_arrow(GContext* ctx, int rad_hz, int rad_vt, int angle, GPoi
 
 static void draw_indicators(Layer* layer, GContext* ctx) {
   GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, background_colour);
   graphics_fill_rect(ctx, bounds, 0, 0);
 
-  graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, foreground_colour);
+  graphics_context_set_stroke_color(ctx, foreground_colour);
   GPoint origin = GPoint(bounds.size.w/2, bounds.size.h/2);
 
   bool settings_ok = setting_geo_lat != -1 && setting_geo_lon != -1;
@@ -121,9 +124,9 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     GPoint north_loc = to_cart_ellipse(north_rad_hz, north_rad_vt, damped_north_direction, origin);
 
     graphics_draw_text(ctx, "N", fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(north_loc.x - north_rad + 1, north_loc.y - north_rad - 5, north_rad * 2, north_rad * 2), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
-    graphics_context_set_fill_color(ctx, GColorBlack);
+    graphics_context_set_fill_color(ctx, background_colour);
     draw_chevron(ctx, north_rad_hz - north_arrow_inset, north_rad_vt - north_arrow_inset, damped_north_direction, origin);
-    graphics_context_set_fill_color(ctx, GColorWhite);
+    graphics_context_set_fill_color(ctx, foreground_colour);
     #endif
 
     // QIBLA INDICATOR
@@ -168,7 +171,7 @@ static void draw_indicators(Layer* layer, GContext* ctx) {
     #else
     GRect note_rect = GRect(0, bounds.size.h - 20, bounds.size.w, 20);
     #endif
-    graphics_context_set_fill_color(ctx, GColorBlack);
+    graphics_context_set_fill_color(ctx, background_colour);
     graphics_fill_rect(ctx, note_rect, 0, 0);
     graphics_draw_text(ctx, note, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GRect(note_rect.origin.x, note_rect.origin.y - 2, note_rect.size.w, note_rect.size.h), GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
   }
@@ -274,6 +277,23 @@ static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   kaaba_bmp_white = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_KAABA_WHITE);
   kaaba_bmp_black = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_KAABA_BLACK);
+
+  WatchInfoColor watch_colour = watch_info_get_color();
+  if (watch_colour == WATCH_INFO_COLOR_WHITE ||
+      watch_colour == WATCH_INFO_COLOR_TIME_WHITE ||
+      watch_colour == WATCH_INFO_COLOR_TIME_STEEL_SILVER ||
+      watch_colour == WATCH_INFO_COLOR_TIME_ROUND_SILVER_14 ||
+      watch_colour == WATCH_INFO_COLOR_TIME_ROUND_SILVER_20 ||
+      watch_colour == WATCH_INFO_COLOR_TIME_ROUND_ROSE_GOLD_14) {
+    foreground_colour = GColorBlack;
+    background_colour = GColorWhite;
+    GBitmap* swap = kaaba_bmp_black;
+    kaaba_bmp_black = kaaba_bmp_white;
+    kaaba_bmp_white = swap;
+  } else {
+    foreground_colour = GColorWhite;
+    background_colour = GColorBlack;
+  }
 
   layer_set_update_proc(window_layer, draw_indicators);
   calculate_qibla_north_offset();
